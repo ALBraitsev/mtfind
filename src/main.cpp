@@ -20,7 +20,7 @@ void usage(const char *programName)
               << std::endl;
 }
 
-MTFindResult readFile(const char *fileName, std::vector<std::string> &lines)
+MTFindResult readFileToString(const char *fileName, std::string &string)
 {
     std::string line;
     std::ifstream myfile;
@@ -31,13 +31,27 @@ MTFindResult readFile(const char *fileName, std::vector<std::string> &lines)
         return MTFindResult::FAILURE;
     }
 
-    while (getline(myfile, line))
-    {
-        lines.push_back(line);
-    }
+    string.assign((std::istreambuf_iterator<char>(myfile)),
+                    std::istreambuf_iterator<char>());
 
     return MTFindResult::OK;
 }
+
+void splitBufferToLines(const std::string& buffer, std::vector<std::string_view>& lines)
+{
+    const char* pb = buffer.data();
+    const char* pe = pb;
+    while(*pe) 
+    {
+        if (*pe == '\n') 
+        {
+            lines.emplace_back(pb, pe - pb);
+            pb = pe + 1;
+        }
+        ++pe;
+    }
+    lines.emplace_back(pb, pe - pb);
+} 
 
 const char *bruteForceFind(const char *string, int stringSize,
                            const char *pattern, int patternSize)
@@ -57,24 +71,24 @@ const char *bruteForceFind(const char *string, int stringSize,
     return nullptr;
 }
 
-std::vector<std::tuple<int, int, std::string_view>> findInRange(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end, const char *pattern, int patternSize, int offset = 0)
+std::vector<std::tuple<int, int, std::string_view>> findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::string_view>::iterator end, const char *pattern, int patternSize, int offset = 0)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
     int lineNumber = 0;
     for (auto& it = begin; it != end; ++it) 
     {
-        auto result = bruteForceFind(it->c_str(), it->size(), pattern, patternSize);
+        auto result = bruteForceFind(it->data(), it->size(), pattern, patternSize);
         if (result)
         {
-            int pos = result - it->c_str();
-            results.push_back({lineNumber + offset, pos, {it->c_str() + pos, static_cast<std::string_view::size_type>(patternSize)}});
+            int pos = result - it->data();
+            results.push_back({lineNumber + offset, pos, {it->data() + pos, static_cast<std::string_view::size_type>(patternSize)}});
         }
         ++lineNumber;
     }
     return results;
 }
 
-std::vector<std::tuple<int, int, std::string_view>> find(std::vector<std::string> &lines, const char *pattern, int parts = 1)
+std::vector<std::tuple<int, int, std::string_view>> find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
 
@@ -106,8 +120,8 @@ int main(int argc, char *argv[])
 
     std::cerr << "Find \"" << argv[2] << "\" in file " << argv[1] << std::endl;
 
-    std::vector<std::string> lines;
-    auto result = readFile(argv[1], lines);
+    std::string buffer;
+    auto result = readFileToString(argv[1], buffer);
 
     if (result != MTFindResult::OK)
     {
@@ -115,16 +129,22 @@ int main(int argc, char *argv[])
         return static_cast<int>(result);
     }
 
+    std::vector<std::string_view> lines;
+    splitBufferToLines(buffer, lines);
+
     std::cerr << "\nFile contents:" << std::endl;
     for (auto &line : lines)
     {
         std::cout << line << "\n";
     }
 
-    auto results = find(lines, argv[2], 100);
-
+    std::vector<std::tuple<int, int, std::string_view>> results;
+    if (lines.size() > 0) 
+    {
+        results = find(lines, argv[2], 100);
+    }
+    
     std::cerr << "\nFind results:" << std::endl;
-    if (results.size()) 
     {
         std::cout << results.size() << std::endl;
         for (auto &[line, pos, str] : results)
