@@ -57,9 +57,9 @@ const char *bruteForceFind(const char *string, int stringSize,
     return nullptr;
 }
 
-std::vector<std::tuple<int, int, std::string>> findInRange(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end, const char *pattern, int patternSize, int offset = 0)
+std::vector<std::tuple<int, int, std::string_view>> findInRange(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end, const char *pattern, int patternSize, int offset = 0)
 {
-    std::vector<std::tuple<int, int, std::string>> results;
+    std::vector<std::tuple<int, int, std::string_view>> results;
     int lineNumber = 0;
     for (auto& it = begin; it != end; ++it) 
     {
@@ -67,16 +67,16 @@ std::vector<std::tuple<int, int, std::string>> findInRange(std::vector<std::stri
         if (result)
         {
             int pos = result - it->c_str();
-            results.push_back({lineNumber + offset, pos, {it->c_str() + pos, it->c_str() + pos + patternSize}});
+            results.push_back({lineNumber + offset, pos, {it->c_str() + pos, static_cast<std::string_view::size_type>(patternSize)}});
         }
         ++lineNumber;
     }
     return results;
 }
 
-std::vector<std::tuple<int, int, std::string>> find(std::vector<std::string> &lines, const char *pattern, int parts = 1)
+std::vector<std::tuple<int, int, std::string_view>> find(std::vector<std::string> &lines, const char *pattern, int parts = 1)
 {
-    std::vector<std::tuple<int, int, std::string>> results;
+    std::vector<std::tuple<int, int, std::string_view>> results;
 
     int patternSize = strlen(pattern);
 
@@ -87,10 +87,10 @@ std::vector<std::tuple<int, int, std::string>> find(std::vector<std::string> &li
     int offset = 0;
     for(auto p = 0; p < parts - 1; ++p, it += partSize, offset += partSize)
     {
-        std::vector<std::tuple<int, int, std::string>> results1 = findInRange(it, it + partSize, pattern, patternSize, offset);
+        std::vector<std::tuple<int, int, std::string_view>> results1 = findInRange(it, it + partSize, pattern, patternSize, offset);
         std::move(results1.begin(), results1.end(), std::back_inserter(results));
     }
-    std::vector<std::tuple<int, int, std::string>> results2 = findInRange(it, lines.end(), pattern, patternSize, offset);
+    std::vector<std::tuple<int, int, std::string_view>> results2 = findInRange(it, lines.end(), pattern, patternSize, offset);
     std::move(results2.begin(), results2.end(), std::back_inserter(results));
 
     return results;
