@@ -132,11 +132,11 @@ int main(int argc, char *argv[])
     std::vector<std::string_view> lines;
     splitBufferToLines(buffer, lines);
 
-    std::cerr << "\nFile contents:" << std::endl;
-    for (auto &line : lines)
-    {
-        std::cout << line << "\n";
-    }
+    // std::cerr << "\nFile contents:" << std::endl;
+    // for (auto &line : lines)
+    // {
+    //     std::cerr << line << "\n";
+    // }
 
     std::vector<std::tuple<int, int, std::string_view>> results;
     if (lines.size() > 0) 
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
         results = find(lines, argv[2], 100);
     }
     
-    std::cerr << "\nFind results:" << std::endl;
+    // std::cerr << "\nFind results:" << std::endl;
     {
         std::cout << results.size() << std::endl;
         for (auto &[line, pos, str] : results)
