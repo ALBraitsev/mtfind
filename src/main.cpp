@@ -57,21 +57,41 @@ const char *bruteForceFind(const char *string, int stringSize,
     return nullptr;
 }
 
-std::vector<std::tuple<int, int, std::string>> find(std::vector<std::string> &lines, const char *pattern)
+std::vector<std::tuple<int, int, std::string>> findInRange(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end, const char *pattern, int patternSize, int offset = 0)
 {
-    int patternSize = strlen(pattern);
     std::vector<std::tuple<int, int, std::string>> results;
     int lineNumber = 0;
-    for (auto &line : lines)
+    for (auto& it = begin; it != end; ++it) 
     {
-        auto result = bruteForceFind(line.c_str(), line.size(), pattern, patternSize);
+        auto result = bruteForceFind(it->c_str(), it->size(), pattern, patternSize);
         if (result)
         {
-            int pos = result - line.c_str();
-            results.push_back({lineNumber, pos, {line.c_str() + pos, line.c_str() + pos + patternSize}});
+            int pos = result - it->c_str();
+            results.push_back({lineNumber + offset, pos, {it->c_str() + pos, it->c_str() + pos + patternSize}});
         }
         ++lineNumber;
     }
+    return results;
+}
+
+std::vector<std::tuple<int, int, std::string>> find(std::vector<std::string> &lines, const char *pattern, int parts = 1)
+{
+    std::vector<std::tuple<int, int, std::string>> results;
+
+    int patternSize = strlen(pattern);
+
+    parts = std::min(parts, static_cast<int>(lines.size()));
+    int partSize = lines.size() / parts;
+
+    auto it = lines.begin();
+    int offset = 0;
+    for(auto p = 0; p < parts - 1; ++p, it += partSize, offset += partSize)
+    {
+        std::vector<std::tuple<int, int, std::string>> results1 = findInRange(it, it + partSize, pattern, patternSize, offset);
+        std::move(results1.begin(), results1.end(), std::back_inserter(results));
+    }
+    std::vector<std::tuple<int, int, std::string>> results2 = findInRange(it, lines.end(), pattern, patternSize, offset);
+    std::move(results2.begin(), results2.end(), std::back_inserter(results));
 
     return results;
 }
@@ -101,7 +121,8 @@ int main(int argc, char *argv[])
         std::cout << line << "\n";
     }
 
-    auto results = find(lines, argv[2]);
+    auto results = find(lines, argv[2], 100);
+
     std::cerr << "\nFind results:" << std::endl;
     if (results.size()) 
     {
