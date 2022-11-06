@@ -58,13 +58,13 @@ MTFindResult readFileToBuffer(const char *fileName, char *&buffer)
     return MTFindResult::OK;
 }
 
-void splitBufferToLines(const char *buffer, std::vector<std::string_view> &lines)
+void splitBufferToLines(const char *buffer, char ld, std::vector<std::string_view> &lines)
 {
     const char *pb = buffer;
     const char *pe = pb;
     while (*pe)
     {
-        if (*pe == '\n')
+        if (*pe == ld)
         {
             lines.emplace_back(pb, pe - pb);
             pb = pe + 1;
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
     }
 
     std::vector<std::string_view> lines;
-    splitBufferToLines(buffer, lines);
+    splitBufferToLines(buffer, '\n', lines);
 
     std::vector<std::tuple<int, int, std::string_view>> results;
     if (lines.size() > 0)
