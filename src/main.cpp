@@ -2,6 +2,8 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <future>
+#include <tuple>
 
 enum class MTFindResult
 {
@@ -20,30 +22,49 @@ void usage(const char *programName)
               << std::endl;
 }
 
-MTFindResult readFileToString(const char *fileName, std::string &string)
+MTFindResult readFileToBuffer(const char *fileName, char *&buffer)
 {
-    std::string line;
-    std::ifstream myfile;
-    myfile.open(fileName);
+    FILE *fp;
+    long lSize;
 
-    if (myfile.is_open() == false)
+    fp = fopen(fileName, "rb");
+    if (!fp)
+        return MTFindResult::FAILURE;
+
+    fseek(fp, 0L, SEEK_END);
+    lSize = ftell(fp);
+    rewind(fp);
+
+    /* allocate memory for entire content */
+    buffer = (char *)malloc(lSize + 1);
+    if (!buffer)
     {
+        fclose(fp);
         return MTFindResult::FAILURE;
     }
 
-    string.assign((std::istreambuf_iterator<char>(myfile)),
-                    std::istreambuf_iterator<char>());
+    /* copy the file into the buffer */
+    if (1 != fread(buffer, lSize, 1, fp))
+    {
+        fclose(fp);
+        free(buffer);
+        return MTFindResult::FAILURE;
+    }
+    buffer[lSize] = 0;
+    
+    /* do your work here, buffer is a string contains the whole text */
+    fclose(fp);
 
     return MTFindResult::OK;
 }
 
-void splitBufferToLines(const std::string& buffer, std::vector<std::string_view>& lines)
+void splitBufferToLines(const char *buffer, std::vector<std::string_view> &lines)
 {
-    const char* pb = buffer.data();
-    const char* pe = pb;
-    while(*pe) 
+    const char *pb = buffer;
+    const char *pe = pb;
+    while (*pe)
     {
-        if (*pe == '\n') 
+        if (*pe == '\n')
         {
             lines.emplace_back(pb, pe - pb);
             pb = pe + 1;
@@ -51,7 +72,7 @@ void splitBufferToLines(const std::string& buffer, std::vector<std::string_view>
         ++pe;
     }
     lines.emplace_back(pb, pe - pb);
-} 
+}
 
 const char *bruteForceFind(const char *string, int stringSize,
                            const char *pattern, int patternSize)
@@ -75,12 +96,12 @@ std::vector<std::tuple<int, int, std::string_view>> findInRange(std::vector<std:
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
     int lineNumber = 0;
-    for (auto& it = begin; it != end; ++it) 
+    for (auto &it = begin; it != end; ++it)
     {
-        auto result = bruteForceFind(it->data(), it->size(), pattern, patternSize);
+        auto result = bruteForceFind(it->data(), static_cast<int>(it->size()), pattern, patternSize);
         if (result)
         {
-            int pos = result - it->data();
+            int pos = static_cast<int>(result - it->data());
             results.push_back({lineNumber + offset, pos, {it->data() + pos, static_cast<std::string_view::size_type>(patternSize)}});
         }
         ++lineNumber;
@@ -92,20 +113,26 @@ std::vector<std::tuple<int, int, std::string_view>> find(std::vector<std::string
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
 
-    int patternSize = strlen(pattern);
+    auto patternSize = strlen(pattern);
 
     parts = std::min(parts, static_cast<int>(lines.size()));
-    int partSize = lines.size() / parts;
+    int partSize = static_cast<int>(lines.size() / parts);
 
     auto it = lines.begin();
     int offset = 0;
-    for(auto p = 0; p < parts - 1; ++p, it += partSize, offset += partSize)
+
+    std::vector<std::future<std::vector<std::tuple<int, int, std::string_view>>>> futures;
+    for (auto p = 0; p < parts - 1; ++p, it += partSize, offset += partSize)
     {
-        std::vector<std::tuple<int, int, std::string_view>> results1 = findInRange(it, it + partSize, pattern, patternSize, offset);
-        std::move(results1.begin(), results1.end(), std::back_inserter(results));
+        futures.push_back(std::async(std::launch::async, findInRange, it, it + partSize, pattern, patternSize, offset));
     }
-    std::vector<std::tuple<int, int, std::string_view>> results2 = findInRange(it, lines.end(), pattern, patternSize, offset);
-    std::move(results2.begin(), results2.end(), std::back_inserter(results));
+    futures.push_back(std::async(std::launch::async, findInRange, it, lines.end(), pattern, patternSize, offset));
+
+    for (auto &&future : futures)
+    {
+        auto r = future.get();
+        std::move(r.begin(), r.end(), std::back_inserter(results));
+    }
 
     return results;
 }
@@ -120,8 +147,8 @@ int main(int argc, char *argv[])
 
     std::cerr << "Find \"" << argv[2] << "\" in file " << argv[1] << std::endl;
 
-    std::string buffer;
-    auto result = readFileToString(argv[1], buffer);
+    char *buffer = 0;
+    auto result = readFileToBuffer(argv[1], buffer);
 
     if (result != MTFindResult::OK)
     {
@@ -132,26 +159,22 @@ int main(int argc, char *argv[])
     std::vector<std::string_view> lines;
     splitBufferToLines(buffer, lines);
 
-    // std::cerr << "\nFile contents:" << std::endl;
-    // for (auto &line : lines)
-    // {
-    //     std::cerr << line << "\n";
-    // }
-
     std::vector<std::tuple<int, int, std::string_view>> results;
-    if (lines.size() > 0) 
+    if (lines.size() > 0)
     {
-        results = find(lines, argv[2], 100);
+        results = find(lines, argv[2], 8);
     }
-    
+
     // std::cerr << "\nFind results:" << std::endl;
     {
         std::cout << results.size() << std::endl;
         for (auto &[line, pos, str] : results)
         {
-            std::cout << line+1 << " " << pos+1 << " " << str << "\n";
+            std::cout << line + 1 << " " << pos + 1 << " " << str << "\n";
         }
     }
+
+    free(buffer);
 
     return static_cast<int>(MTFindResult::OK);
 }
