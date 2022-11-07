@@ -5,8 +5,6 @@
 #include <future>
 #include <tuple>
 
-#include "search_algorithms.h"
-
 enum class MTFindResult
 {
     OK,
@@ -76,8 +74,27 @@ void splitBufferToLines(const char *buffer, char ld, std::vector<std::string_vie
     lines.emplace_back(pb, pe - pb);
 }
 
+inline 
+const char *bruteforcematch(const char *string, int stringSize,
+                        const char *pattern, int patternSize)
+{
+    if (patternSize > stringSize)
+        return nullptr;
+
+    int i, j;
+    for (j = 0; j <= stringSize - patternSize; ++j)
+    {
+        for (i = 0; i < patternSize && (pattern[i] == '?' || pattern[i] == string[i + j]); ++i)
+            ;
+        if (i >= patternSize)
+            return string + j;
+    }
+
+    return nullptr;
+}
+
 std::vector<std::tuple<int, int, std::string_view>> 
-findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::string_view>::iterator end, const char *pattern, int patternSize, int offset = 0, SerchAlgorithm algorithm = bruteforcematch)
+findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::string_view>::iterator end, const char *pattern, int patternSize, int offset = 0)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
     int lineNumber = 0;
@@ -85,7 +102,7 @@ findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::stri
     {
         const char *text = it->data();
         int textSize = static_cast<int>(it->size());
-        while (auto result = algorithm(text, textSize, pattern, patternSize))
+        while (auto result = bruteforcematch(text, textSize, pattern, patternSize))
         {
             int pos = static_cast<int>(result - it->data());
             results.push_back({lineNumber + offset, pos, {result, static_cast<std::string_view::size_type>(patternSize)}});
@@ -98,7 +115,7 @@ findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::stri
 }
 
 std::vector<std::tuple<int, int, std::string_view>> 
-find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1, SerchAlgorithm algorithm = bruteforcematch)
+find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
 
@@ -113,9 +130,9 @@ find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1, S
     std::vector<std::future<std::vector<std::tuple<int, int, std::string_view>>>> futures;
     for (auto p = 0; p < parts - 1; ++p, it += partSize, offset += partSize)
     {
-        futures.push_back(std::async(std::launch::async, findInRange, it, it + partSize, pattern, patternSize, offset, algorithm));
+        futures.push_back(std::async(std::launch::async, findInRange, it, it + partSize, pattern, patternSize, offset));
     }
-    futures.push_back(std::async(std::launch::async, findInRange, it, lines.end(), pattern, patternSize, offset, algorithm));
+    futures.push_back(std::async(std::launch::async, findInRange, it, lines.end(), pattern, patternSize, offset));
 
     for (auto &&future : futures)
     {
@@ -153,8 +170,7 @@ int main(int argc, char *argv[])
     std::vector<std::tuple<int, int, std::string_view>> results;
     if (lines.size() > 0)
     {
-        // results = find(lines, argv[2], 8);
-        results = find(lines, argv[2], 8, Moore(argv[2], strlen(argv[2])));
+        results = find(lines, argv[2], 8);
     }
 
     {
