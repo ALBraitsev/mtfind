@@ -36,7 +36,7 @@ inline const char *bruteforcematch(const char *string, int stringSize,
 //////////////////////////////////////////////////////////////////////////////// @brief
 ///
 
-#define NO_OF_CHARS 127
+#define NO_OF_CHARS 128
 
 // A utility function to get maximum of two integers
 inline int max(int a, int b) { return (a > b) ? a : b; }

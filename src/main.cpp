@@ -120,7 +120,9 @@ find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1, S
     for (auto &&future : futures)
     {
         auto r = future.get();
-        std::move(r.begin(), r.end(), std::back_inserter(results));
+
+        results.reserve(results.size() + r.size());
+        std::move(std::begin(r), std::end(r), std::back_inserter(results));
     }
 
     return results;
