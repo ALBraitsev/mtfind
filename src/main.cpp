@@ -7,13 +7,14 @@
 
 #include <string.h>
 
-#define THREADS_NUMBER 6
+#define NUMBER_OF_TASKS 6
 
 using MTMathResult = std::tuple<long, long, std::string_view>;
 using MTMathResults = std::vector<MTMathResult>;
 using MTMathInPartResults = std::tuple<long, MTMathResults>;
 
-inline
+/// @brief 
+/// @param programName 
 void usage(const char *programName)
 {
     std::cerr << "Usage:\n\t"
@@ -25,7 +26,11 @@ void usage(const char *programName)
               << std::endl;
 }
 
-inline
+/// @brief читает содержимое файла в массив символов
+/// использует файлы, а не потоки, так как они кратно быстрее на всех платформах
+/// @param fileName имя файла
+/// @param buffer адрес буфера
+/// @return возвращает количество символов в массиве 
 long readFileToBuffer(const char *fileName, char **buffer)
 {
     FILE *fp;
@@ -59,9 +64,14 @@ long readFileToBuffer(const char *fileName, char **buffer)
     return lSize;
 }
 
-inline
+/// @brief ищет маску в заданной области массива символов
+/// @param text содержимое исходного файла в виде массива символов 
+/// @param textSize размер массива
+/// @param pattern маска
+/// @param patternSize размер маски
+/// @return вектор результатов поиска {<номер строки>, <позиция в строке>, <найденный текст>} и количество символов '\\n' в заданной области массива символов
 MTMathInPartResults
-findInPart(const char* text, const char* textEnd, const char* pattern, size_t patternSize)
+actual_search(const char* text, const char* textEnd, const char* pattern, size_t patternSize)
 {
     MTMathInPartResults result(0, {});
     const char* t = text;
@@ -107,12 +117,23 @@ findInPart(const char* text, const char* textEnd, const char* pattern, size_t pa
     return result;
 }
 
-inline
+/// @brief ищет маску в массиве символов, 
+/// разделяет работу на несколько независимых задач
+/// объединяет результаты поиска
+/// @param text содержимое исходного файла в виде массива символов 
+/// @param textSize размер массива
+/// @param pattern маска
+/// @param patternSize размер маски
+/// @param parts количество задач
+/// @return вектор результатов поиска {<номер строки>, <позиция в строке>, <найденный текст>}
 MTMathResults 
-find(const char* text, size_t textSize, const char* pattern, size_t patternSize, int parts) 
+search(const char* text, size_t textSize, const char* pattern, size_t patternSize, int parts)
 {
     std::vector<std::future<MTMathInPartResults>> futures;
 
+    /// формируем и запускаем независимые задачи
+    /// их должно быть parts - штук 
+    /// но может и не получиться
     size_t partSize = textSize / parts;
     const char* textEnd = text + textSize;
 
@@ -120,11 +141,13 @@ find(const char* text, size_t textSize, const char* pattern, size_t patternSize,
     const char* partEnd = part + partSize;
     while (part < textEnd) 
     {
+        /// расширяем очередную область до следующего символа '\n'
+        /// область всегда будет состоять из целого числа строк 
         while (partEnd < textEnd && *partEnd++ != '\n')
         {            
         }
-
-        futures.push_back(std::async(std::launch::async, findInPart, part, partEnd, pattern, patternSize));
+        
+        futures.push_back(std::async(std::launch::async, actual_search, part, partEnd, pattern, patternSize));
 
         part = partEnd;
         partEnd = part + partSize;
@@ -134,15 +157,17 @@ find(const char* text, size_t textSize, const char* pattern, size_t patternSize,
     long offset = 0;
     for (auto&& future : futures)
     {
+        /// получаем результаты выполнения каждой задачи
         auto&& [n, r] = future.get();
 
+        /// пересчитываем номера строк
         for (auto& [s, p, str] : r)
         { 
             s += offset;
         }
-        
         offset += n;
 
+        /// объединяем результаты в один вектор
         results.reserve(results.size() + r.size());
         std::move(std::begin(r), std::end(r), std::back_inserter(results));
     }
@@ -151,12 +176,16 @@ find(const char* text, size_t textSize, const char* pattern, size_t patternSize,
 
 int main(int argc, char *argv[])
 {
+    /// для правильной работы нужны второй и третий аргумент
+    /// argv[1] -- имя файла
+    /// argv[2] -- маска для поиска
     if (argc < 3)
     {
         usage(argv[0]);
         return 1;
     }
 
+    /// считываем содержимое файла в переменную text    
     char *text = nullptr;
     long textSize = readFileToBuffer(argv[1], &text);
 
@@ -165,7 +194,11 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    MTMathResults mathResults = find(text, textSize, argv[2], strlen(argv[2]), THREADS_NUMBER);
+    /// ищем маску в тексте
+    /// делим работу на NUMBER_OF_TASKS независимых задач
+    MTMathResults mathResults = search(text, textSize, argv[2], strlen(argv[2]), NUMBER_OF_TASKS);
+
+    /// вывод результатов
     std::cout << mathResults.size() << std::endl;
     for (auto &[line, pos, str] : mathResults)
     {
