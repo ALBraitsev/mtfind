@@ -5,10 +5,13 @@
 #include <future>
 #include <tuple>
 
-typedef std::tuple<int, int, std::string_view> MTMathResult;
-typedef std::vector<MTMathResult> MTMathResults;
-typedef std::tuple<long, MTMathResults> MTMathInPartResults;
+#define THREADS_NUMBER 6
 
+using MTMathResult = std::tuple<long, long, std::string_view>;
+using MTMathResults = std::vector<MTMathResult>;
+using MTMathInPartResults = std::tuple<long, MTMathResults>;
+
+inline
 void usage(const char *programName)
 {
     std::cerr << "Usage:\n\t"
@@ -20,21 +23,24 @@ void usage(const char *programName)
               << std::endl;
 }
 
+inline
 long readFileToBuffer(const char *fileName, char **buffer)
 {
     FILE *fp;
     long lSize;
 
     fp = fopen(fileName, "rb");
-    if (!fp)
+    if (fp == nullptr)
+    {
         return -1;
+    }
 
     fseek(fp, 0L, SEEK_END);
     lSize = ftell(fp);
     fseek(fp, 0L, SEEK_SET);
 
     *buffer = (char *)malloc(lSize);
-    if (!buffer)
+    if (*buffer == nullptr)
     {
         fclose(fp);
         return -2;
@@ -43,7 +49,6 @@ long readFileToBuffer(const char *fileName, char **buffer)
     if (fread(*buffer, lSize, 1, fp) != 1)
     {
         fclose(fp);
-        free(buffer);
         return -3;
     }
     
@@ -52,6 +57,7 @@ long readFileToBuffer(const char *fileName, char **buffer)
     return lSize;
 }
 
+inline
 MTMathInPartResults
 findInPart(const char* text, const char* textEnd, const char* pattern, size_t patternSize)
 {
@@ -99,6 +105,7 @@ findInPart(const char* text, const char* textEnd, const char* pattern, size_t pa
     return result;
 }
 
+inline
 MTMathResults 
 find(const char* text, size_t textSize, const char* pattern, size_t patternSize, int parts) 
 {
@@ -112,7 +119,8 @@ find(const char* text, size_t textSize, const char* pattern, size_t patternSize,
     while (part < textEnd) 
     {
         while (partEnd < textEnd && *partEnd++ != '\n')
-            ;
+        {            
+        }
 
         futures.push_back(std::async(std::launch::async, findInPart, part, partEnd, pattern, patternSize));
 
@@ -126,7 +134,10 @@ find(const char* text, size_t textSize, const char* pattern, size_t patternSize,
     {
         auto&& [n, r] = future.get();
 
-        for (auto& [s, p, str] : r) s += offset;
+        for (auto& [s, p, str] : r)
+        { 
+            s += offset;
+        }
         
         offset += n;
 
@@ -144,19 +155,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cerr << "Find \"" << argv[2] << "\" in file " << argv[1] << std::endl;
-
-    char *text = 0;
+    char *text = nullptr;
     long textSize = readFileToBuffer(argv[1], &text);
 
     if (textSize < 0)
     {
-        std::cerr << "Can't open file: " << argv[1] << std::endl;
         return 2;
     }
 
-    MTMathResults mathResults = find(text, textSize, argv[2], strlen(argv[2]), 6);
-    std::cout << '\n' << mathResults.size() << std::endl;
+    MTMathResults mathResults = find(text, textSize, argv[2], strlen(argv[2]), THREADS_NUMBER);
+    std::cout << mathResults.size() << std::endl;
     for (auto &[line, pos, str] : mathResults)
     {
         std::cout << (line + 1) << " " << (pos + 1) << " " << str << "\n";
