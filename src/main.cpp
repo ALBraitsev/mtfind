@@ -76,24 +76,29 @@ void splitBufferToLines(const char *buffer, char ld, std::vector<std::string_vie
     lines.emplace_back(pb, pe - pb);
 }
 
-std::vector<std::tuple<int, int, std::string_view>> findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::string_view>::iterator end, const char *pattern, int patternSize, int offset = 0, SerchAlgorithm algorithm = bruteforcematch)
+std::vector<std::tuple<int, int, std::string_view>> 
+findInRange(std::vector<std::string_view>::iterator begin, std::vector<std::string_view>::iterator end, const char *pattern, int patternSize, int offset = 0, SerchAlgorithm algorithm = bruteforcematch)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
     int lineNumber = 0;
     for (auto &it = begin; it != end; ++it)
     {
-        auto result = algorithm(it->data(), static_cast<int>(it->size()), pattern, patternSize);
-        if (result)
+        const char *text = it->data();
+        int textSize = static_cast<int>(it->size());
+        while (auto result = algorithm(text, textSize, pattern, patternSize))
         {
             int pos = static_cast<int>(result - it->data());
-            results.push_back({lineNumber + offset, pos, {it->data() + pos, static_cast<std::string_view::size_type>(patternSize)}});
+            results.push_back({lineNumber + offset, pos, {result, static_cast<std::string_view::size_type>(patternSize)}});
+            textSize -= ((result + patternSize) - text);
+            text = result + patternSize;
         }
         ++lineNumber;
     }
     return results;
 }
 
-std::vector<std::tuple<int, int, std::string_view>> find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1, SerchAlgorithm algorithm = bruteforcematch)
+std::vector<std::tuple<int, int, std::string_view>> 
+find(std::vector<std::string_view> &lines, const char *pattern, int parts = 1, SerchAlgorithm algorithm = bruteforcematch)
 {
     std::vector<std::tuple<int, int, std::string_view>> results;
 
