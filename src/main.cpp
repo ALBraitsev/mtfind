@@ -5,6 +5,8 @@
 #include <future>
 #include <tuple>
 
+#include <string.h>
+
 #define THREADS_NUMBER 6
 
 using MTMathResult = std::tuple<long, long, std::string_view>;
